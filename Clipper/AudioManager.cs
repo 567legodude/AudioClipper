@@ -16,7 +16,6 @@ namespace Clipper
 {
     public class AudioManager
     {
-
         public readonly MainWindow Main;
 
         private readonly MMDeviceEnumerator _devices = new MMDeviceEnumerator();
@@ -27,23 +26,25 @@ namespace Clipper
 
         private List<CaptureHandler> _handlers = new List<CaptureHandler>();
 
+        // Any format can be added if there is a Stream to write that format
         public readonly Dictionary<string, Func<string, WaveFormat, int, Stream>> AudioFormats =
-            new Dictionary<string, Func<string, WaveFormat, int, Stream>>()
-        {
-            {"WAV", (path, format, bitRate) => new WaveFileWriter(path, format)},
-            {"MP3", (path, format, bitRate) => new LameMP3FileWriter(path, format, bitRate)},
-        };
+            new Dictionary<string, Func<string, WaveFormat, int, Stream>>() {
+                {"WAV", (path, format, bitRate) => new WaveFileWriter(path, format)},
+                {"MP3", (path, format, bitRate) => new LameMP3FileWriter(path, format, bitRate)},
+            };
 
         public AudioManager(MainWindow main)
         {
             Main = main;
         }
 
+        // Change the status text on the main window
         private void SendStatus(string text, Brush color = null)
         {
             Main.UpdateStatus(text, color);
         }
 
+        // Stop capture on error
         private void OnFailure(Exception e)
         {
             Main.Dispatcher?.BeginInvoke(DispatcherPriority.Normal, (Action) (() => {
@@ -53,6 +54,7 @@ namespace Clipper
             }));
         }
 
+        // Get output stream from capture handler
         private Stream GetStream(CaptureHandler handler, string outputFolder, string outputFormat, int index)
         {
             if (!Directory.Exists(outputFolder))
@@ -60,7 +62,8 @@ namespace Clipper
                 throw new ArgumentException("Output directory doesn't exist.");
             }
             var time = DateTime.Now;
-            var file = $"{time.Day}-{time.Month}-{time.Year}_{time.Hour}-{time.Minute}-{time.Second}_{handler.Device.GetFileName()}";
+            var file =
+                $"{time.Day}-{time.Month}-{time.Year}_{time.Hour}-{time.Minute}-{time.Second}_{handler.Device.GetFileName()}";
             var path = Path.Combine(outputFolder, file.WithExtension(outputFormat));
             while (File.Exists(path))
             {
@@ -87,7 +90,8 @@ namespace Clipper
             }
         }
 
-        public void StartCapture(IEnumerable<string> devices, string outputFolder, string outputFormat, int clipLength, Action finished)
+        public void StartCapture(IEnumerable<string> devices, string outputFolder, string outputFormat, int clipLength,
+            Action finished)
         {
             _outputFolder = outputFolder;
             _outputFormat = outputFormat;
@@ -112,8 +116,7 @@ namespace Clipper
             Task.Run(async () => {
                 try
                 {
-                    var streams = _handlers.Select((handler, i) =>
-                        (handler, stream: GetStream(handler, _outputFolder, _outputFormat, i))).ToList();
+                    var streams = _handlers.Select((handler, i) => (handler, stream: GetStream(handler, _outputFolder, _outputFormat, i))).ToList();
                     await Task.WhenAll(streams.Select(tuple => tuple.handler.Clip(tuple.stream)));
                 }
                 catch (Exception e)
@@ -123,11 +126,11 @@ namespace Clipper
                     {
                         msg = string.Join("\n", a.InnerExceptions.Select((ex, i) => $"{i + 1}) {ex.Message}"));
                     }
-                    MessageBox.Show(Main, "There was an error while saving the clips. Message:\n" + msg, "Error",
-                        MessageBoxButton.OK);
+                    MessageBox.Show(Main, "There was an error while saving the clips. Message:\n" + msg, "Error", MessageBoxButton.OK);
                     Main.Dispatcher?.BeginInvoke(DispatcherPriority.Normal, error);
                     return;
                 }
+                // Restart capture after clips are saved
                 foreach (var handler in _handlers)
                 {
                     handler.Activate();
@@ -149,6 +152,5 @@ namespace Clipper
                 Main.Dispatcher?.BeginInvoke(DispatcherPriority.Normal, finished);
             });
         }
-
     }
 }
